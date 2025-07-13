@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>फिंगरप्रिंट वेरिफिकेशन</title>
+    <style>
+        /* CSS कोड यहां शुरू होता है */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #1a1a2e; /* गहरा नीला */
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            overflow: hidden; /* ताकि कोई स्क्रोल बार न हो */
+        }
+
+        #container {
+            background-color: #2a2a4a; /* थोड़ा हल्का नीला */
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            text-align: center;
+            position: relative;
+            width: 350px; /* कंटेनर की चौड़ाई */
+            box-sizing: border-box;
+        }
+
+        #fingerprint-area {
+            width: 150px;
+            height: 150px;
+            margin: 0 auto 30px;
+            position: relative;
+            border-radius: 50%;
+            overflow: hidden; /* प्रोग्रेस बार को गोले के अंदर रखने के लिए */
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 180, 255, 0.5); /* हल्का चमक */
+            transition: transform 0.2s ease-out;
+        }
+
+        #fingerprint-area:active {
+            transform: scale(0.95); /* प्रेस करने पर थोड़ा सिकुड़ना */
+        }
+
+        #fingerprint-icon {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: invert(1) grayscale(100%) brightness(150%); /* सफेद फ़िंगरप्रिंट */
+        }
+
+        #timer-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 0%; /* शुरुआत में 0% */
+            background: linear-gradient(to top, #00bfff, #00ffff); /* नीला से सियान */
+            transition: height 0.1s linear; /* स्मूथ एनिमेशन के लिए */
+            transform-origin: bottom;
+            border-radius: 0 0 75px 75px; /* नीचे से गोल */
+        }
+
+        #message {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #98fb98; /* हल्का हरा */
+            margin-bottom: 20px;
+            opacity: 0; /* शुरुआत में छिपा हुआ */
+            transform: translateY(20px);
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+        }
+
+        #message.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #gender-options {
+            display: flex;
+            justify-content: space-around;
+            gap: 15px;
+            margin-top: 20px;
+            opacity: 0; /* शुरुआत में छिपा हुआ */
+            transform: translateY(20px);
+            transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+        }
+
+        #gender-options.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #gender-options button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            background-color: #6a0572; /* गहरा बैंगनी */
+            color: white;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            flex: 1; /* समान चौड़ाई के लिए */
+        }
+
+        #gender-options button:hover {
+            background-color: #8d0898; /* हल्का बैंगनी */
+            transform: translateY(-3px);
+        }
+        /* CSS कोड यहां समाप्त होता है */
+    </style>
+</head>
+<body>
+
+    <div id="container">
+        <div id="fingerprint-area">
+            <img src="fingerprint.png" alt="Fingerprint Icon" id="fingerprint-icon">
+            <div id="timer-progress"></div>
+        </div>
+        <p id="message"></p>
+        <div id="gender-options">
+            <button id="boy-btn">लड़के</button>
+            <button id="girl-btn">लड़कियों</button>
+        </div>
+    </div>
+
+    <script>
+        /* JavaScript कोड यहां शुरू होता है */
+        document.addEventListener('DOMContentLoaded', () => {
+            const fingerprintArea = document.getElementById('fingerprint-area');
+            const timerProgress = document.getElementById('timer-progress');
+            const messageElement = document.getElementById('message');
+            const genderOptions = document.getElementById('gender-options');
+            const boyBtn = document.getElementById('boy-btn');
+            const girlBtn = document.getElementById('girl-btn');
+
+            const redirectUrl = 'https://toppera.jimdofree.com';
+            const requiredPressTime = 10000; // 10 seconds in milliseconds
+            let pressStartTime = 0;
+            let animationFrameId;
+
+            // --- लोकल स्टोरेज चेक ---
+            // यदि यूज़र पहले ही वेरीफाई हो चुका है, तो सीधे रीडायरेक्ट करें
+            if (localStorage.getItem('isVerified') === 'true') {
+                window.location.replace(redirectUrl);
+                return; // आगे का कोड एग्जीक्यूट न करें
+            }
+
+            // --- इवेंट लिसनर्स ---
+
+            // माउस डाउन इवेंट (प्रेस शुरू)
+            fingerprintArea.addEventListener('mousedown', startPress);
+            fingerprintArea.addEventListener('touchstart', startPress, { passive: true }); // टच स्क्रीन के लिए
+
+            // माउस अप/आउट इवेंट (प्रेस खत्म)
+            fingerprintArea.addEventListener('mouseup', endPress);
+            fingerprintArea.addEventListener('mouseleave', endPress);
+            fingerprintArea.addEventListener('touchend', endPress);
+            fingerprintArea.addEventListener('touchcancel', endPress);
+
+            // जेंडर बटन क्लिक इवेंट्स
+            boyBtn.addEventListener('click', () => {
+                localStorage.setItem('isVerified', 'true'); // भविष्य के लिए सेव करें
+                window.location.href = redirectUrl;
+            });
+
+            girlBtn.addEventListener('click', () => {
+                localStorage.setItem('isVerified', 'true'); // भविष्य के लिए सेव करें
+                window.location.href = redirectUrl;
+            });
+
+            // --- फ़ंक्शंस ---
+
+            function startPress(event) {
+                // अगर पहले से ही टाइमर चल रहा है, तो कुछ न करें (सुरक्षा के लिए)
+                if (pressStartTime !== 0) return;
+
+                pressStartTime = Date.now(); // प्रेस शुरू होने का समय
+                timerProgress.style.transition = 'none'; // तुरंत हाइट को रीसेट करें
+                timerProgress.style.height = '0%';
+                messageElement.classList.remove('show');
+                genderOptions.classList.remove('show');
+
+                // प्रोग्रेस बार को अपडेट करने के लिए एनिमेशन फ़्रेम का उपयोग करें
+                function animateProgress() {
+                    const elapsedTime = Date.now() - pressStartTime;
+                    const progress = Math.min(1, elapsedTime / requiredPressTime); // 0 से 1 के बीच
+                    timerProgress.style.height = `${progress * 100}%`;
+
+                    if (elapsedTime >= requiredPressTime) {
+                        // 10 सेकंड पूरा होने पर
+                        cancelAnimationFrame(animationFrameId); // एनिमेशन बंद करें
+                        verifySuccess();
+                    } else {
+                        animationFrameId = requestAnimationFrame(animateProgress);
+                    }
+                }
+                animationFrameId = requestAnimationFrame(animateProgress);
+            }
+
+            function endPress() {
+                // यदि 10 सेकंड पूरे होने से पहले ही प्रेस छोड़ दिया गया
+                if (Date.now() - pressStartTime < requiredPressTime && pressStartTime !== 0) {
+                    cancelAnimationFrame(animationFrameId); // एनिमेशन बंद करें
+                    timerProgress.style.transition = 'height 0.3s ease-out'; // स्मूथली रीसेट करने के लिए
+                    timerProgress.style.height = '0%'; // प्रोग्रेस बार को रीसेट करें
+                }
+                pressStartTime = 0; // टाइमर रीसेट करें
+            }
+
+            function verifySuccess() {
+                messageElement.textContent = 'आप रोबोट नहीं, आप इंसान हैं!';
+                messageElement.classList.add('show');
+                
+                // कुछ देर बाद जेंडर विकल्प दिखाएं
+                setTimeout(() => {
+                    genderOptions.classList.add('show');
+                }, 1000); // 1 सेकंड बाद दिखाएं
+            }
+        });
+        /* JavaScript कोड यहां समाप्त होता है */
+    </script>
+</body>
+</html>
